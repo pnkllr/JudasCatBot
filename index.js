@@ -3,7 +3,6 @@
 require('dotenv').config();
 
 const tmi = require('tmi.js');
-const { Client, Intents } = require('discord.js');
 const fs = require('fs/promises');
 const path = require('path');
 const fetch = require('node-fetch');
@@ -11,13 +10,9 @@ const fetch = require('node-fetch');
 // --------------------------
 // Config
 // --------------------------
-const GENERAL_CHANNEL_ID = process.env.GENERAL_CHANNEL_ID || '1403975109735350395';
-const STREAM_CHANNEL_ID = process.env.STREAM_CHANNEL_ID || '1406543359647940700';
-
 // Make CHANNEL_NAME robust (strip leading '#', allow fallback)
-const TWITCH_CHANNEL_NAME = ((process.env.CHANNEL_NAME || '').replace(/^#/, '').trim()) || 'pnkllr';
+const TWITCH_CHANNEL_NAME = ((process.env.CHANNEL_NAME || '').replace(/^#/, '').trim()) || 'depemy';
 const TWITCH_CHANNEL = `#${TWITCH_CHANNEL_NAME}`;
-
 const DATA_FILE = path.resolve(__dirname, 'values.json');
 const BLOCKED_WORDS = ['f4f', 'follow me'];
 
@@ -69,114 +64,6 @@ async function getTwitchAppToken() {
   return _twitchAppToken;
 }
 
-async function getViewerCount(loginName) {
-  try {
-    if (!TWITCH_CLIENT_ID || !TWITCH_CLIENT_SECRET) {
-      // Missing creds; skip gracefully
-      return null;
-    }
-    const token = await getTwitchAppToken();
-    const res = await fetch(`https://api.twitch.tv/helix/streams?user_login=${encodeURIComponent(loginName)}`, {
-      headers: {
-        'Client-ID': TWITCH_CLIENT_ID,
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    if (res.status === 401) { // token invalid/expired; refresh once
-      _twitchAppToken = null;
-      return getViewerCount(loginName);
-    }
-    if (!res.ok) throw new Error(`Helix streams HTTP ${res.status}`);
-    const json = await res.json();
-    if (json.data && json.data.length > 0) {
-      return Number(json.data[0].viewer_count) || 0;
-    }
-    return 0; // offline
-  } catch (err) {
-    console.warn('getViewerCount error:', err?.message || err);
-    return null; // keep previous / don’t block
-  }
-}
-
-// --------------------------
-// Discord (v13)
-// --------------------------
-const Discord = new Client({
-  intents: [
-    Intents.FLAGS.GUILDS,
-    Intents.FLAGS.GUILD_MEMBERS,
-    Intents.FLAGS.GUILD_MESSAGES,
-    Intents.FLAGS.DIRECT_MESSAGES
-  ],
-  partials: ['CHANNEL'] // for DMs if ever needed
-});
-
-let trackedChannel = null;
-
-// ---------- Activity Rotation ----------
-function buildActivities(viewers) {
-  const v = (typeof viewers === 'number' && viewers >= 0) ? viewers : null;
-
-  const base = [
-    { name: 'with the chat', type: 'PLAYING' }
-  ];
-
-  const streamName = v === null
-    ? 'TTV: PnKllr'
-    : `TTV: PnKllr | ${v} viewer${v === 1 ? '' : 's'}`;
-
-  base.push({ name: streamName, type: 'STREAMING', url: 'https://twitch.tv/pnkllr' });
-  return base;
-}
-
-async function setRandomDiscordActivity() {
-  const viewers = await getViewerCount(TWITCH_CHANNEL_NAME).catch(() => null);
-  const activities = buildActivities(viewers);
-  const pick = activities[(Math.random() * activities.length) | 0];
-  try {
-    Discord.user.setActivity(pick);
-  } catch (e) {
-    console.warn('setActivity error:', e?.message || e);
-  }
-}
-
-Discord.once('ready', async () => {
-  console.log(`Discord logged in as ${Discord.user.tag}`);
-
-  // Initial status right away
-  await setRandomDiscordActivity();
-
-  // Rotate every 5 minutes
-  setInterval(setRandomDiscordActivity, 300_000);
-
-  try {
-    generalChannel = await Discord.channels.fetch(GENERAL_CHANNEL_ID);
-  } catch (err) {
-    console.error('Failed to fetch track generral channel:', err);
-  }
-  try {
-    streamChannel = await Discord.channels.fetch(STREAM_CHANNEL_ID);
-  } catch (err) {
-    console.error('Failed to fetch track stream channel:', err);
-  }
-});
-
-Discord.on('guildMemberAdd', async (member) => {
-  try {
-    await generalChannel.send('```diff\n+ ' + member.displayName + '```');
-  } catch (err) {
-    console.error('Error sending join message:', err);
-  }
-});
-
-Discord.on('guildMemberRemove', async (member) => {
-  try {
-    await generalChannel.send('```diff\n- ' + member.displayName + '```');
-  } catch (err) {
-    console.error('Error sending leave message:', err);
-  }
-});
-
 // --------------------------
 // Twitch (tmi.js v1.8.5)
 // --------------------------
@@ -220,39 +107,20 @@ Twitch.on('raided', (channel, username, viewers) => {
 });
 
 // Sub
-Twitch.on('subscription', async (channel, username) => {
-  try {
-    await streamChannel.send('```asciidoc\n= New Subscriber =\n[' + username + ']\n```');
-  } catch (e) { console.error(e); }
-  safeSay(channel, `Oh no! @${username} is wasting money =O`);
+Twitch.on('subscription', (channel, username) => {
+  safeSay(channel, `Meowie! @${username} just subbed`);
 });
 
 // Resub
-Twitch.on('resub', async (channel, username, months, message, tags) => {
+Twitch.on('resub', (channel, username, months, message, tags) => {
   const m = Number(tags?.['msg-param-cumulative-months']) || Number(months) || 0;
-  try {
-    await streamChannel.send(
-      '```asciidoc\n' +
-      `= x${m} Month Subscriber =\n` +
-      `[${username}] :: ${message || ''}\n` +
-      '```'
-    );
-  } catch (e) { console.error(e); }
-  safeSay(channel, `I guess you didn't learn the first time hey @${username}?`);
+  safeSay(channel, `Glad you are stuck with us @${username}?`);
 });
 
 // Gift Sub
-Twitch.on('subgift', async (channel, username, _streakMonths, recipient, _methods, tags) => {
+Twitch.on('subgift', (channel, username, _streakMonths, recipient, _methods, tags) => {
   const totalGiftMonths = Number(tags?.['msg-param-gift-months']) || 1; // FIX: no bitwise ~
-  try {
-    await streamChannel.send(
-      '```asciidoc\n' +
-      `= ${username} Gifted a Sub =\n` +
-      `[${recipient}] :: ${totalGiftMonths} Months Total\n` +
-      '```'
-    );
-  } catch (e) { console.error(e); }
-  safeSay(channel, `I'm sure they have their own money @${username}`);
+  safeSay(channel, `I'm sure they appreciate it @${username}`);
 });
 
 // --------------------------
@@ -299,51 +167,43 @@ Twitch.on('message', async (channel, userstate, message, self) => {
 
   const commands = {
     '!commands': () =>
-      `[ !discord | !website | !socials | !gt  | !tools | !lurk | !clipit | !wickd | !dead | !fall | !countreset ]`,
+      `[ !discord | !gt  | !clipit  | !tools | !lurk | !dead | !fall | !countreset ]`,
 
     '!discord': () =>
       `@${userstate['display-name']}, This is the server you're looking for ${process.env.DISCORD_INVITE}`,
 
-    '!website': () =>
-      `@${userstate['display-name']}, Don't forget to add it to your bookmarks! https://pnkllr.net`,
+    '!gt': () => `DePemy`,
 
-    '!socials': () => `Twitter: PnKllr || YouTube: PnKllr`,
-
-    '!gt': () => `PnKllr || PnKllrTV`,
-
-    '!tools': () => `Need some tools for your stream? Clip command, chat overlay? Check out https://tools.pnkllr.net`,
+    '!tools': () => `Check out my friend PnKllr's streaming tools at https://tools.pnkllr.net`,
 
     '!lurk': () =>
-      `@${userstate['display-name']}, PopCorn Thanks for Lurking! We hope you enjoy your stay PopCorn`,
+      `@${userstate['display-name']}, Enjoy your lurk!`,
 
     '!clipit': async () => {
       try {
         const controller = new AbortController();
         const t = setTimeout(() => controller.abort(), 10_000);
-        const res = await fetch(`https://tools.pnkllr.net/tools/clipit.php?channel=pnkllr&format=text`, { signal: controller.signal });
+        const res = await fetch(`https://tools.pnkllr.net/tools/clipit.php?channel=depemy&format=text`, { signal: controller.signal });
         clearTimeout(t);
         const text = await res.text();
-        return `Heres the Plunkup @${userstate['display-name']} ${text}`;
+        return `Heres the clip @${userstate['display-name']} ${text}`;
       } catch (e) {
         return `@${userstate['display-name']} failed to clip right now. Try again in a moment.`;
       }
     },
 
-    '!wickd': () =>
-      `Check out our range of Wick'd Geek gear at https://wickdgeek.com.`,
-
     '!dead': async () => {
       if (!isPrivileged) return;
       data.dead += 1;
       await saveData();
-      return `PnKllr has died ${data.dead} time(s)`;
+      return `Pemy has died ${data.dead} time(s)`;
     },
 
     '!fall': async () => {
       if (!isPrivileged) return;
       data.fall += 1;
       await saveData();
-      return `PnKllr has fallen ${data.fall} time(s)`;
+      return `Pemy has fallen ${data.fall} time(s)`;
     },
 
     '!countreset': async () => {
@@ -386,12 +246,10 @@ function colorChange() {
 setInterval(colorChange, 300_000); // 5 min
 
 const timers = [
-  "Enjoying stream? Then why dont you leave a follow, say something in chat or even go follow PnKllr on social media.",
-  "Continue the conversation over on Discord! https://discord.gg/nth7y8TqMT",
-  "Check out our Wick'd Geek Collection! https://wickdgeek.com",
-  "See something dumb on stream? Use !clipit to capture it!",
+  "Enjoying stream? Then why dont you leave a follow! Or save up points to give the cats a treat!",
+  "Join our Discord via https://discord.gg/g8FvfCwhRN",
   "To view a list of commands, use !commands",
-  "Need tools for your stream? Head on over to https://tools.pnkllr.net"
+  "My friend PnKllr made some helpful stream tools at https://tools.pnkllr.net"
 ];
 
 function discTimer() {
@@ -406,7 +264,6 @@ setInterval(discTimer, 1_800_000); // 30 min
   await loadData();
 
   await Promise.allSettled([
-    Discord.login(process.env.DISCORD_BOT_TOKEN),
     Twitch.connect()
   ]);
 
