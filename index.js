@@ -98,12 +98,12 @@ Twitch.on('connected', () => {
 
 // Hosted
 Twitch.on('hosted', (channel, username) => {
-  safeSay(channel, `Really @${username}? You want to share this with other people? Really?`);
+  safeSay(channel, `Really @${username}? You want to host this person?`);
 });
 
 // Raided
 Twitch.on('raided', (channel, username, viewers) => {
-  safeSay(channel, `Oh hey @${username} and their ${viewers} minions o/`);
+  safeSay(channel, `Welcome @${username} and your ${viewers} raiders!`);
 });
 
 // Sub
