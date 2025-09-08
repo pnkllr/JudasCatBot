@@ -167,7 +167,7 @@ Twitch.on('message', async (channel, userstate, message, self) => {
 
   const commands = {
     '!commands': () =>
-      `[ !discord | !gt  | !clipit  | !tools | !lurk | !dead | !fall | !countreset ]`,
+      `!discord | !gt  | !clipit  | !tools | !lurk | !dead | !fall | !countreset`,
 
     '!discord': () =>
       `@${userstate['display-name']}, This is the server you're looking for ${process.env.DISCORD_INVITE}`,

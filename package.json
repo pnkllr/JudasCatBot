@@ -8,7 +8,7 @@
     "devDependencies": {
         "@types/tmi.js": "^1.8.1"
     },
-    "name": "oakballs",
+    "name": "JudasCatBot",
     "version": "1.0.0",
     "main": "index.js",
     "scripts": {
@@ -17,13 +17,13 @@
     },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/pnkllr/Oakballs.git"
+        "url": "git+https://github.com/pnkllr/JudasCatBot.git"
     },
     "author": "",
     "license": "MIT",
     "bugs": {
-        "url": "https://github.com/pnkllr/Oakballs/issues"
+        "url": "https://github.com/pnkllr/JudasCatBot/issues"
     },
-    "homepage": "https://github.com/pnkllr/Oakballs#readme",
+    "homepage": "https://github.com/pnkllr/JudasCatBot#readme",
     "description": ""
 }
