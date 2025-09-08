@@ -170,7 +170,7 @@ Twitch.on('message', async (channel, userstate, message, self) => {
       `!discord | !gt  | !clipit  | !tools | !lurk | !dead | !fall | !countreset`,
 
     '!discord': () =>
-      `@${userstate['display-name']}, This is the server you're looking for ${process.env.DISCORD_INVITE}`,
+      `@${userstate['display-name']}, be welcome in our little community discord: ${process.env.DISCORD_INVITE}`,
 
     '!gt': () => `DePemy`,
 
